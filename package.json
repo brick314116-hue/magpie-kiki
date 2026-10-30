@@ -1,0 +1,37 @@
+{
+  "name": "magpie-agent-kiki",
+  "version": "0.1.0",
+  "description": "Kiki as a magpie agent: pick one of magpie's models for it. The same folder is also a Kiki plugin, which writes the model into ~/.kiki/config.toml at session start.",
+  "type": "module",
+  "files": [
+    "kiki.agent.js",
+    "kimi.plugin.json",
+    "hooks/sync.mjs",
+    "icon.svg",
+    "README.md"
+  ],
+  "keywords": [
+    "magpie",
+    "magpie-agent",
+    "kiki",
+    "llm-gateway"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brick314116-hue/magpie-kiki.git"
+  },
+  "homepage": "https://github.com/brick314116-hue/magpie-kiki",
+  "bugs": {
+    "url": "https://github.com/brick314116-hue/magpie-kiki/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node --check kiki.agent.js && node --check hooks/sync.mjs"
+  },
+  "magpie": {
+    "agent": "./kiki.agent.js"
+  }
+}
