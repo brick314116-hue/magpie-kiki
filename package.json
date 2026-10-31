@@ -1,6 +1,6 @@
 {
   "name": "magpie-agent-kiki",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Kiki as a magpie agent: pick one of magpie's models for it. The Magpie plugin writes the model into ~/.kiki/config.toml from its Bun host; the same folder is also an optional Kiki plugin for a session-start sync.",
   "type": "module",
   "main": "./kiki.host.js",
