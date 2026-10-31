@@ -1,7 +1,7 @@
 {
   "name": "magpie-bridge",
-  "version": "0.1.0",
-  "description": "Keep Kiki's model and provider in step with the model picked in Magpie.",
+  "version": "0.2.0",
+  "description": "Optional fallback: apply Magpie's model choice at Kiki session start, even when Magpie is closed.",
   "license": "MIT",
   "interface": {
     "displayName": "Magpie Bridge",
