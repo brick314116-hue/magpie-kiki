@@ -1,86 +1,118 @@
 # Magpie × Kiki
 
-让 Kiki 出现在 Magpie 的 **Agents** 页面：在 Magpie 里给 Kiki 选一个模型，Kiki 的新会话就用它。
+[![npm](https://img.shields.io/npm/v/magpie-agent-kiki)](https://www.npmjs.com/package/magpie-agent-kiki)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**只需要装进 Magpie 一次。** Kiki 端插件是可选的兜底，不装也能用（见下面“为什么这次只装一边”）。
+将 [Kiki](https://github.com/X-T-E-R/kiki) 接入 [Magpie](https://github.com/yetone/magpie) 的 agent 管理体系。安装后，Kiki 会出现在 Magpie 的 **Agents** 页面；在 Magpie 中为它选择一个模型，Kiki 的新会话即可使用该模型。
 
-## 为什么这次只装一边
+[Kiki](https://github.com/X-T-E-R/kiki) 是一款开源多模型 AI agent 工作台，提供桌面 GUI、TUI 与 Web 界面，支持在 Claude、GPT、Gemini、Kimi 等模型之间调度子智能体，并可在本地运行。[Magpie](https://github.com/yetone/magpie) 是本地模型网关与 agent 管理器，用于集中配置和切换各个 harness 所使用的模型。本项目在两者之间提供配置桥接，使 Kiki 能够像其他 agent 一样由 Magpie 管理。
 
-其他 harness 不用在它自己那边再装一个插件，原因是它们的配置刚好是 Magpie 能写的格式：
+## 功能
 
-- 大多数 harness 的配置是 **JSON / YAML / env**，Magpie 的 agent 插件可以直接写；
-- Codex 这类是 Magpie 的**内置 agent**，它的 TOML 由 Magpie 的 Go 代码直接写，不经过插件沙箱。
+- 在 Magpie 的 **Agents** 页面注册 Kiki，并提供模型选择器。
+- 将选定模型、网关地址和密钥同步到 Kiki 的用户配置。
+- 同步模型的上下文长度、最大输出长度、图片输入能力与思考档位。
+- 向 Magpie 声明 Kiki 的 Library 位置，使指令、MCP 服务器和 Skills 写入 Kiki 对应目录。
+- 取消选择或停用 Kiki 时，自动撤回插件写入的配置并恢复原有默认模型。
+- 仅修改带标记的配置块，保留用户已有的 provider、model 与注释。
+- 提供可选的 Kiki 侧 SessionStart 钩子，在 Magpie 未运行时完成同步。
 
-Kiki 不一样：供应商和模型在 **`~/.kiki/config.toml`（TOML）**，而 Magpie 的 agent 插件跑在 moejs 沙箱里，只支持 JSON / YAML / env，也没有文件系统。
+## 工作原理
 
-但这个包还有另一半：`kiki.host.js`。`package.json` 里的 `main` 让 Magpie 的 **Bun 插件宿主**也加载这个包，宿主是常驻进程，有 `node:fs` 和定时器，可以直接写 Kiki 的 TOML。于是：
+Magpie 的 agent 插件运行在 moejs 沙箱内，仅支持 JSON、YAML 和 env 形式的配置，且无法访问文件系统；Kiki 的 provider 与 model 则保存在 TOML 中。为完成写入，本包由三个协同部分组成：
 
-- **Magpie 端插件**：Agents 页面、模型选择、写 `~/.kiki/magpie.json`（JSON 交接文件）；
-- **同一个包的 Bun 宿主部分**：每秒看一次交接文件，变化就写进 `config.toml` 和 `credentials.toml`；
-- **Kiki 端插件（可选）**：在 Kiki 会话启动时做同一件事，共用同一份同步代码和同一把锁。
+1. **Magpie agent 插件**（`kiki.agent.js`）：在 Agents 页面提供 Kiki 条目和模型选择，将选择结果写入 `~/.kiki/magpie.json`。
+2. **Bun 插件宿主入口**（`kiki.host.js`）：由 Magpie 的 Bun 插件宿主加载并常驻运行，每秒检查交接文件，将变化写入 Kiki 的 TOML 配置。
+3. **可选的 Kiki 插件**（`kimi.plugin.json` 与 `hooks/sync.mjs`）：在 Kiki 会话启动时执行相同的同步，用于 Magpie 未运行的情况。
 
-同步逻辑只有一份：`lib/bridge.mjs`。
+第 2、3 部分共用 `lib/bridge.mjs` 中的同步逻辑和文件锁。
+
+```text
+Magpie Agents 页面
+        │ 选择模型
+        ▼
+~/.kiki/magpie.json              JSON 交接文件
+        │
+        ├── Magpie Bun 插件宿主（每秒检查）
+        └── Kiki SessionStart 钩子（可选）
+        ▼
+~/.kiki/config.toml
+~/.kiki/credentials/credentials.toml
+```
 
 ## 安装
 
-### 只装 Magpie 端（推荐）
+### 环境要求
 
-从 npm 安装：
+| 组件 | 要求 |
+| --- | --- |
+| Magpie | 0.1.2229 或更新，需包含 Bun 插件宿主 |
+| Kiki | 0.5.0 或更新 |
+| Bun | 1.4.x，由 Magpie 自动下载 |
+| Node.js | 18 或更新，仅供可选的 Kiki 侧钩子使用 |
+
+Kiki 的配置目录 `~/.kiki` 必须存在。Magpie 也通过该目录判断 Kiki 是否已安装。
+
+### 通过 npm 安装（推荐）
 
 ```sh
 magpie plugin add magpie-agent-kiki
 ```
 
-或先克隆本仓库，再装本地文件夹：
+### 通过源码安装
 
 ```sh
 git clone https://github.com/brick314116-hue/magpie-kiki.git
 magpie plugin add ./magpie-kiki
 ```
 
-也可以在 Magpie 窗口的 **Plugins → Add a plugin** 里搜索 `kiki`（GitHub 上的 `magpie-plugin` 标签），或选择克隆下来的文件夹。
+也可以在 Magpie 窗口的 **Plugins → Add a plugin** 中选择克隆后的文件夹。
 
-装好后 **Agents** 页会出现 **Kiki**，点它的模型选择器挑一个 Magpie 模型。选中后约 1 秒内写入 Kiki 的配置；然后**新开一个 Kiki 会话**即可。
+### 插件发现
 
-> 让 Magpie 保持运行：自动同步发生在 Magpie 的 Bun 插件宿主里。Magpie 关着时，Kiki 仍用上次同步的配置。
+Magpie 的 Discover 通过 GitHub 的 `magpie-plugin` 标签发现 agent 插件，本仓库已添加该标签。Magpie 的 npm 搜索仅收录 OpenCode / pi 插件，agent 插件不会出现在 npm 搜索结果中，因此建议直接使用 `magpie plugin add` 安装。
 
-### 可选：Kiki 端兜底
+### 可选：Kiki 侧插件
 
-只有下面这些情况才需要：
+Kiki 侧插件用于在 Magpie 未运行时兜底同步，例如：
 
-- Magpie 没运行，而你想在终端里直接用 Kiki；
-- 用 `magpie kiki <model>` 改完模型后，不等 Magpie 启动就马上开 Kiki；
-- 这台机器的 Bun 不能用，Magpie 的插件宿主起不来。
+- 需要在终端中直接启动 Kiki，而 Magpie 没有运行；
+- 使用 `magpie kiki <model>` 修改模型后，希望立即启动 Kiki；
+- 当前环境中 Magpie 的 Bun 插件宿主无法启动。
 
-在 Kiki 里：
+在 Kiki 中执行：
 
 ```text
 /plugins install --trust https://github.com/brick314116-hue/magpie-kiki
 /plugins enable magpie-bridge
 ```
 
-也可以安装本地克隆下来的同一个文件夹。GUI 里在安装预览中点 **允许并安装**，并选择**全局使用**（否则会话启动钩子不会跑）。
+也可以安装本地克隆后的同一文件夹。使用 GUI 时，在安装预览中选择 **允许并安装**，并选择 **全局使用**，否则会话启动钩子不会执行。
 
-`--trust` / “允许并安装” 是 Kiki 对会运行代码的插件的知情同意。这个钩子只读写 `~/.kiki` 下的本机文件，没有网络请求，也不会常驻。
+`--trust` 与“允许并安装”是 Kiki 对会执行代码的插件所要求的确认。该钩子只读写 `~/.kiki` 下的本机文件，不进行网络请求，也不会常驻运行。
 
-## 注意事项
+## 使用
 
-- **Magpie 端是必需的，Kiki 端不是。** 只装 Magpie 就能用；不装 Kiki 侧插件时，Magpie 必须运行，自动同步才会发生。
-- **同步有约 1 秒延迟。** 宿主每秒检查一次交接文件；选完模型后等 1 秒再开 Kiki 最稳。想彻底消除这个窗口，就装 Kiki 侧插件——它在会话启动前同步。
-- **Magpie 关着时，CLI 改模型不会立即生效。** `magpie kiki <model>` 只写交接文件；等 Magpie 下次启动，宿主才会把它写进 `config.toml`。急着用就装 Kiki 侧插件，或先 `magpie plugin list`（它会启动一次宿主并完成同步）。
-- **需要 Bun。** Magpie 的插件宿主是 Bun 1.4.x（Magpie 会自己下载）。Bun 不可用时宿主不启动，自动同步不会发生；此时 Kiki 侧插件是兜底。
-- **只支持 `~/.kiki`。** 如果 Magpie 进程能读到 `KIKI_HOME`，脚本也认它；但没有为每个 Kiki 实例分别配置的界面。
-- **只影响新会话。** Kiki 在会话创建/启动时确定模型；已经开着的会话不会中途换模型。
-- **会修改两个文件。** `~/.kiki/config.toml` 和 `~/.kiki/credentials/credentials.toml` 里会出现带 `magpie-bridge` 标记的块；不要手改标记块，下一次同步会覆盖。取消选择会自动撤回。
-- **密钥保存在本机。** `credentials.toml` 会保存 Magpie 网关的密钥（脚本会尽量设为仅当前用户可读；Windows 上 `chmod` 可能不起作用）。不要把这两个文件提交到 Git。
-- **Kiki 侧钩子以你的用户权限运行 Node。** 它只读写上述本机文件，不联网、不常驻。Magpie 侧跑在 Magpie 自带的 Bun 宿主里，同样只读写这些本机文件。
-- **默认思考档位是 `high`。** 模型有思考档位时，`default_effort` 会优先选 `high`，其次 `medium` / `low`，都没有时用列表里的最后一个档位。想临时换档位，在 Kiki 会话里选；想改默认值，需要改脚本后重新安装。
-- **两边同时装也不会打架。** 两份代码共用 `~/.kiki/.magpie-bridge/sync.lock` 和同一套原子写入；同时触发时后到的会跳过。
-- **npm 上已发布 `magpie-agent-kiki`。** Magpie 的 Discover 通过 GitHub 的 `magpie-plugin` 标签发现 agent 插件；npm 搜索只收 OpenCode / pi 插件，所以搜 npm 不一定能看到它。想进入 Magpie 的推荐列表，还需要向 `magpie-community/plugins` 的 `registry.json` 提交 `kind: "agent"` 条目（可选）。
+1. 启动 Magpie，在 **Agents** 页面找到 **Kiki**。
+2. 点击 Kiki 的模型选择器，选择一个 Magpie 模型。
+3. 等待约 1 秒，使 Magpie 的 Bun 宿主完成同步；安装了 Kiki 侧插件时，也可直接启动 Kiki。
+4. 新开一个 Kiki 会话，会话将使用所选模型。
 
-## 它写了什么
+切换模型时重复上述步骤即可，已打开的 Kiki 会话不会中途更换模型。
 
-`~/.kiki/config.toml` 末尾会多出一块带标记的内容，例如：
+### 撤回
+
+在 Magpie 的 Agents 页面将 Kiki 切换回原有模型，或停用 Kiki 条目。约 1 秒内（或下一次 Kiki 会话启动时），插件会：
+
+- 删除 `config.toml` 与 `credentials.toml` 中的 `magpie-bridge` 标记块；
+- 将 `default_model` 恢复为原有值及其注释；
+- 删除 `~/.kiki/.magpie-bridge/state.json`。
+
+如果先卸载了插件，标记块会保留。此时需手动删除 `# >>> magpie-bridge >>>` 与 `# <<< magpie-bridge <<<` 之间的内容，恢复 `default_model`，并删除 `~/.kiki/magpie.json` 和 `~/.kiki/.magpie-bridge/`。
+
+## 配置写入
+
+同步完成后，`~/.kiki/config.toml` 末尾会增加一个带标记的配置块，例如：
 
 ```toml
 # >>> magpie-bridge >>>
@@ -101,68 +133,82 @@ default_effort = "xhigh"
 # <<< magpie-bridge <<<
 ```
 
-同时把 `default_model` 改成 `magpie-kiki/<模型 id>`，并在
-`~/.kiki/credentials/credentials.toml` 写入同一个 provider 的 `api_key`。
+同时，插件会将 `default_model` 改为 `magpie-kiki/<模型 id>`，并在 `~/.kiki/credentials/credentials.toml` 中写入同一 provider 的 `api_key`。
 
-- `capabilities` 和 `support_efforts` 来自 Magpie 对该模型的描述：有思考档位时 Kiki 才能选档位，模型支持图片时才能粘贴截图。`default_effort` 是 Kiki 启动思考模型时需要的默认档位（优先 `high`，其次 `medium` / `low`；都没有时用列表里的最后一个档位）。
-- 你原有的注释、其他 provider/model、`agent_executor_overrides` 等都不会被重写。
-- 标记块里的内容由 Magpie 管理，手改会在下一次同步被覆盖。
-- 如果 Kiki 自己重写了 `config.toml`（把注释丢掉），插件下次也会按表名把旧块清掉再写，不会出现重复表。
+- `capabilities` 与 `support_efforts` 来自 Magpie 对该模型的描述。模型支持思考档位时，Kiki 才能选择档位；支持图片输入时，才能粘贴截图。
+- `default_effort` 优先取 `high`，其次为 `medium`、`low`；均不存在时取档位列表的最后一项。
+- 用户原有的注释、其他 provider / model、`agent_executor_overrides` 等内容不会被重写。
+- 标记块中的内容由 Magpie 管理，手动修改会在下一次同步时被覆盖。
+- 如果 Kiki 重写了 `config.toml` 并丢失注释，插件会按表名清理旧块后再写入，不会产生重复表。
 
-## 撤回
+### Library
 
-在 Magpie 的 Agents 页把 Kiki 切回它自己的模型，或关掉 Kiki 那一行。约 1 秒内（或下一次 Kiki 会话启动时），插件会：
+插件向 Magpie 声明了 Kiki 的 Library 位置，Magpie 的指令、MCP 服务器和 Skills 会分别写入：
 
-- 删掉 `config.toml` 和 `credentials.toml` 里的 `magpie-bridge` 块；
-- 把 `default_model` 恢复成你原来的值和整行注释；
-- 删除 `~/.kiki/.magpie-bridge/state.json`。
+| 内容 | 路径 |
+| --- | --- |
+| 指令 | `~/.kiki/AGENTS.md` |
+| MCP 服务器 | `~/.kiki/mcp.json`（Kimi 格式） |
+| Skills | `~/.kiki/skills/` |
 
-已经打开的 Kiki 会话不受影响；新会话会回到原来的模型。
+## 注意事项
 
-如果先卸载了插件，标记块会留下。手动删除
-`# >>> magpie-bridge >>>` 到 `# <<< magpie-bridge <<<` 之间的内容，把
-`default_model` 改回去，并删除 `~/.kiki/magpie.json` 和
-`~/.kiki/.magpie-bridge/`。
+- **Magpie 端为必需组件。** 只安装 Magpie 端即可使用；Kiki 侧插件是可选的兜底方案。
+- **自动同步依赖 Magpie 运行。** 同步由 Magpie 的 Bun 插件宿主执行。Magpie 关闭时，Kiki 继续使用上次同步的配置。
+- **同步存在约 1 秒延迟。** 宿主每秒检查一次交接文件，选择模型后等待约 1 秒再启动 Kiki 最为稳妥。安装 Kiki 侧插件可消除这一窗口。
+- **Magpie 关闭时，CLI 修改不会立即生效。** `magpie kiki <model>` 仅写入交接文件，需等 Magpie 下次启动后才写入 `config.toml`。可通过安装 Kiki 侧插件，或运行一次 `magpie plugin list` 触发宿主同步。
+- **仅影响新会话。** Kiki 在会话创建或启动时确定模型，已打开的会话不会中途切换。
+- **会修改两个配置文件。** `~/.kiki/config.toml` 与 `~/.kiki/credentials/credentials.toml` 中会出现带 `magpie-bridge` 标记的块，请勿手动修改标记块。取消选择会自动撤回。
+- **密钥保存在本机。** `credentials.toml` 会保存 Magpie 网关的密钥。脚本会尽量将文件权限限制为仅当前用户可读，但 Windows 上的 `chmod` 可能不生效。请勿将这两个文件提交到 Git。
+- **默认思考档位为 `high`。** 模型提供思考档位时，`default_effort` 优先选择 `high`。可在 Kiki 会话中临时切换档位；修改默认值需要调整脚本后重新安装。
+- **两侧同时安装不会冲突。** 两份代码共用 `~/.kiki/.magpie-bridge/sync.lock` 和同一套原子写入机制，同时触发时后执行的一方会跳过。
+- **仅支持默认 Kiki 主目录。** 若 Magpie 进程可读取 `KIKI_HOME`，脚本也会使用该变量；目前没有为多个 Kiki 实例分别配置的界面。
+- **需要 Bun。** Magpie 的插件宿主运行于 Bun 1.4.x。Bun 不可用时宿主不会启动，自动同步不会发生，此时可使用 Kiki 侧插件兜底。
+- **Kiki 侧钩子以当前用户权限运行 Node。** 它只读写上述本机文件，不联网、不常驻。Magpie 侧运行在 Magpie 自带的 Bun 宿主中，同样只读写这些本机文件。
 
-## Magpie Library
+## 故障排查
 
-这个 agent 插件也声明了 Kiki 的 Library 位置，Magpie 的指令、MCP 服务器和 Skills 会分别写到：
+- **Kiki 未出现在 Magpie 的 Agents 页面**：确认插件目录包含 `package.json`，且其中同时存在 `"magpie": { "agent": "./kiki.agent.js" }` 与 `"main": "./kiki.host.js"`；确认 `~/.kiki` 目录存在。在 Magpie 的 Plugins 页面查看该插件是否报错。
+- **Magpie 中搜索不到该插件**：Discover 通过 GitHub 的 `magpie-plugin` 标签发现 agent 插件，不会将 agent 插件纳入 npm 搜索结果。直接执行 `magpie plugin add magpie-agent-kiki`。
+- **选择了模型但 Kiki 未变化**：
+  1. 确认 Magpie 正在运行，并等待 1–2 秒；
+  2. 查看 `~/.kiki/.magpie-bridge/last.log`；
+  3. 在 Magpie 的 Plugins 页面确认插件没有加载错误；
+  4. 仍无法同步时，安装 Kiki 侧插件作为兜底。
+- **Magpie 的插件宿主未启动**：Magpie 需要 Bun 1.4.x。运行一次 `magpie plugin list` 可触发宿主；若提示 Bun 相关错误，请按提示处理。Kiki 侧插件不依赖 Magpie 的宿主。
+- **找不到 `node`**：仅 Kiki 侧可选钩子需要 Node.js。安装 Node.js 18 或更新版本，并确保其位于 Kiki 进程的 `PATH` 中。
+- **`config.toml` 中已存在 `magpie-kiki` provider**：插件会将其视为用户自有配置并拒绝覆盖，日志中会记录 `config.toml already has a magpie-kiki provider table; leaving it alone`。请先重命名或删除该表后重试。
 
-- `~/.kiki/AGENTS.md`（指令）
-- `~/.kiki/mcp.json`（MCP，Kimi 形状）
-- `~/.kiki/skills/`（Skills）
-
-## 排查
-
-- **Kiki 没出现在 Magpie 的 Agents 页**：确认文件夹里有 `package.json`，并且 `"magpie": {"agent": "./kiki.agent.js"}` 和 `"main": "./kiki.host.js"` 都在；`~/.kiki` 目录存在（Magpie 用这个目录判断 Kiki 是否安装）。在 Magpie 的 Plugins 页看这行有没有报错。
-- **Magpie 里搜不到这个插件**：Magpie 的 Discover 通过 GitHub 的 `magpie-plugin` 标签发现 agent 插件（本仓库已加）；它不会把 agent 插件放进 npm 搜索结果。直接运行 `magpie plugin add magpie-agent-kiki` 最稳。
-- **选了模型但 Kiki 没变**：
-  1. 确认 Magpie 正在运行，等 1–2 秒；
-  2. 看 `~/.kiki/.magpie-bridge/last.log`；
-  3. 在 Magpie 的 Plugins 页看这个插件有没有加载错误；
-  4. 仍然不行就装 Kiki 侧插件，用会话启动钩子兜底。
-- **Magpie 的插件宿主没起来**：Magpie 需要 Bun 1.4.x。运行一次 `magpie plugin list` 会触发宿主；如果它报 Bun 的错误，按提示处理。Kiki 侧插件不依赖 Magpie 的宿主。
-- **`node` 找不到**：只有 Kiki 侧可选钩子用 `node`。安装 Node.js 18+ 并确保它在 Kiki 进程的 PATH 里。
-- **`config.toml` 里已经有 `magpie-kiki` provider**：插件会认为那是你自己的，不覆盖，日志里会写
-  `already has a magpie-kiki provider table`。先改名或删除那个表再试。
-
-## 要求
-
-- Magpie 0.1.2229 或更新（Bun 插件宿主；已在 0.1.2229 上验证）
-- Kiki 0.5.0 或更新（`config.toml` 的 provider/model 格式；可选插件需要 hooks）
-- Bun 1.4.x（Magpie 会自己下载，供插件宿主使用）
-- Node.js 18+（只给可选的 Kiki 侧钩子用）
-
-## 文件
+## 项目结构
 
 ```text
-package.json          Magpie 插件的清单（npm / Magpie 读取）
-kiki.agent.js         Magpie agent 描述 + connect
+package.json          Magpie 插件清单（npm 与 Magpie 读取）
+kiki.agent.js         Magpie agent 描述与 connect 实现
 kiki.host.js          Bun 插件宿主入口：监听交接文件并同步
-lib/bridge.mjs        两边共用的同步逻辑
-kimi.plugin.json      Kiki 插件清单（可选的 SessionStart hook）
+lib/bridge.mjs        两侧共用的同步逻辑
+kimi.plugin.json      Kiki 插件清单（可选的 SessionStart 钩子）
 hooks/sync.mjs        Kiki 侧钩子入口，调用 lib/bridge.mjs
 icon.svg              图标
+README.md             项目说明
 LICENSE               MIT 许可证
-README.md             本文件
 ```
+
+## 开发
+
+本项目无需构建，修改后可直接安装。运行语法检查：
+
+```sh
+npm run check
+```
+
+## 相关链接
+
+- Kiki：[https://github.com/X-T-E-R/kiki](https://github.com/X-T-E-R/kiki)
+- Magpie：[https://github.com/yetone/magpie](https://github.com/yetone/magpie)
+- 插件仓库：[https://github.com/brick314116-hue/magpie-kiki](https://github.com/brick314116-hue/magpie-kiki)
+- npm 包：[https://www.npmjs.com/package/magpie-agent-kiki](https://www.npmjs.com/package/magpie-agent-kiki)
+- 问题反馈：[https://github.com/brick314116-hue/magpie-kiki/issues](https://github.com/brick314116-hue/magpie-kiki/issues)
+
+## 许可证
+
+[MIT](LICENSE)
