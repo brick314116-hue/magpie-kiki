@@ -29,7 +29,7 @@ export const agent = {
   model: "model",
   // Kiki identifies itself as kiki-cli; named here so Usage can tell it
   ua: ["kiki-cli"],
-  notice: "New Kiki sessions use this model. While Magpie runs, the bundled Bun host applies the choice to ~/.kiki/config.toml within a second. The optional Kiki-side plugin covers a closed Magpie.",
+  notice: "New Kiki sessions use this model, and every model checked in Magpie is listed in Kiki. While Magpie runs, the bundled Bun host applies the catalog to ~/.kiki/config.toml within seconds. The optional Kiki-side plugin covers a closed Magpie.",
   library: {
     instructions: "~/.kiki/AGENTS.md",
     mcp: "~/.kiki/mcp.json",

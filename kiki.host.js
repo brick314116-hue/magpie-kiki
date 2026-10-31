@@ -18,7 +18,7 @@ import { syncOnce } from "./lib/bridge.mjs"
 const HOME = process.env.KIKI_HOME || path.join(os.homedir(), ".kiki")
 const HANDOFF = path.join(HOME, "magpie.json")
 const EVERY = 1000
-const FORCE_EVERY = 60
+const FORCE_EVERY = 10
 
 let started = false
 let seen = null
@@ -35,17 +35,22 @@ function readHandoff() {
   }
 }
 
-function tick() {
+let running = false
+async function tick() {
   ticks++
   const now = readHandoff()
   const changed = now !== seen
   if (!changed && ticks % FORCE_EVERY !== 0) return
+  if (running) return
+  running = true
   try {
-    syncOnce()
+    await syncOnce()
   } catch (e) {
     // syncOnce logs its own failures; never let one end the host
+  } finally {
+    running = false
+    seen = now
   }
-  seen = now
 }
 
 export default {

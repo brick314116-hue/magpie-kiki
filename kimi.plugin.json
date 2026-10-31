@@ -1,12 +1,12 @@
 {
   "name": "magpie-bridge",
-  "version": "0.2.1",
-  "description": "Optional fallback: apply Magpie's model choice at Kiki session start, even when Magpie is closed.",
+  "version": "0.2.2",
+  "description": "Optional fallback: apply Magpie's model catalog and choice at Kiki session start, even when Magpie is closed.",
   "license": "MIT",
   "interface": {
     "displayName": "Magpie Bridge",
     "shortDescription": "使用 Magpie 为 Kiki 选择的模型",
-    "longDescription": "会话启动时读取 ~/.kiki/magpie.json（由 Magpie 的 Kiki agent 插件写入），把模型、网关地址和密钥同步到 ~/.kiki/config.toml 与 credentials.toml。Magpie 取消选择后，这项配置会被撤回，原来的 default_model 会恢复。"
+    "longDescription": "会话启动时读取 ~/.kiki/magpie.json（由 Magpie 的 Kiki agent 插件写入），并向本机 Magpie 网关读取当前勾选的模型目录，把全部模型、网关地址和密钥同步到 ~/.kiki/config.toml 与 credentials.toml。Magpie 取消选择后，这项配置会被撤回，原来的 default_model 会恢复。"
   },
   "icon": "./icon.svg",
   "hooks": [

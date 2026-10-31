@@ -12,11 +12,11 @@
 import { syncOnce } from "../lib/bridge.mjs"
 
 let done = false
-function run() {
+async function run() {
   if (done) return
   done = true
   try {
-    syncOnce()
+    await syncOnce()
   } catch (e) {
     // syncOnce already logs; this only guards the unexpected
   }
