@@ -25,12 +25,20 @@ Kiki 不一样：供应商和模型在 **`~/.kiki/config.toml`（TOML）**，而
 
 ### 只装 Magpie 端（推荐）
 
+从 npm 安装：
+
+```sh
+magpie plugin add magpie-agent-kiki
+```
+
+或先克隆本仓库，再装本地文件夹：
+
 ```sh
 git clone https://github.com/brick314116-hue/magpie-kiki.git
 magpie plugin add ./magpie-kiki
 ```
 
-也可以在 Magpie 窗口的 **Plugins → Add a plugin** 里选择克隆下来的文件夹。
+也可以在 Magpie 窗口的 **Plugins → Add a plugin** 里搜索 `kiki`（GitHub 上的 `magpie-plugin` 标签），或选择克隆下来的文件夹。
 
 装好后 **Agents** 页会出现 **Kiki**，点它的模型选择器挑一个 Magpie 模型。选中后约 1 秒内写入 Kiki 的配置；然后**新开一个 Kiki 会话**即可。
 
@@ -68,7 +76,7 @@ magpie plugin add ./magpie-kiki
 - **Kiki 侧钩子以你的用户权限运行 Node。** 它只读写上述本机文件，不联网、不常驻。Magpie 侧跑在 Magpie 自带的 Bun 宿主里，同样只读写这些本机文件。
 - **默认思考档位是 `high`。** 模型有思考档位时，`default_effort` 会优先选 `high`，其次 `medium` / `low`，都没有时用列表里的最后一个档位。想临时换档位，在 Kiki 会话里选；想改默认值，需要改脚本后重新安装。
 - **两边同时装也不会打架。** 两份代码共用 `~/.kiki/.magpie-bridge/sync.lock` 和同一套原子写入；同时触发时后到的会跳过。
-- **没有发布到 npm / Magpie 社区 registry。** 直接从本仓库或本地文件夹安装即可。要让 Magpie 的在线 Plugins 列表也收录，需要另外发布 npm 包并向社区仓库提交 `registry.json` 条目（可选）。
+- **npm 上已发布 `magpie-agent-kiki`。** Magpie 的 Discover 通过 GitHub 的 `magpie-plugin` 标签发现 agent 插件；npm 搜索只收 OpenCode / pi 插件，所以搜 npm 不一定能看到它。想进入 Magpie 的推荐列表，还需要向 `magpie-community/plugins` 的 `registry.json` 提交 `kind: "agent"` 条目（可选）。
 
 ## 它写了什么
 
@@ -127,6 +135,7 @@ default_effort = "xhigh"
 ## 排查
 
 - **Kiki 没出现在 Magpie 的 Agents 页**：确认文件夹里有 `package.json`，并且 `"magpie": {"agent": "./kiki.agent.js"}` 和 `"main": "./kiki.host.js"` 都在；`~/.kiki` 目录存在（Magpie 用这个目录判断 Kiki 是否安装）。在 Magpie 的 Plugins 页看这行有没有报错。
+- **Magpie 里搜不到这个插件**：Magpie 的 Discover 通过 GitHub 的 `magpie-plugin` 标签发现 agent 插件（本仓库已加）；它不会把 agent 插件放进 npm 搜索结果。直接运行 `magpie plugin add magpie-agent-kiki` 最稳。
 - **选了模型但 Kiki 没变**：
   1. 确认 Magpie 正在运行，等 1–2 秒；
   2. 看 `~/.kiki/.magpie-bridge/last.log`；
